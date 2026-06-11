@@ -341,6 +341,7 @@ void UI::updateGoalPopup() {
                 gCtx.currentPopup.awayScore,
                 gCtx.currentPopup.awayTeam.c_str());
             animatePopupIn();
+            drawGoalPopup();   // dessine le contenu complet UNE seule fois
         }
     } else if (gCtx.popupState == POPUP_GOAL_SHOWING) {
         if (now >= gCtx.currentPopup.showUntil) {
@@ -348,9 +349,9 @@ void UI::updateGoalPopup() {
             animatePopupOut();
             gCtx.popupState = POPUP_NONE;
             gCtx.needsFullRedraw = true;
-        } else {
-            drawGoalPopup();
         }
+        // Sinon : ne rien redessiner. La popup est statique -> la redessiner
+        // a chaque tick provoquait un scintillement (fillScreen + flags).
     }
 }
 

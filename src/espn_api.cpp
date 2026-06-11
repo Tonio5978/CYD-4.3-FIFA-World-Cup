@@ -118,8 +118,13 @@ static std::vector<Goal> parseGoals(JsonArray details, const String& teamId) {
 // Scoreboard
 // ============================================================
 
-bool EspnApi::fetchScoreboard() {
-    DBG("[API] Fetching scoreboard...\n");
+// Recupere et parse un scoreboard.
+//  - merge=false : remplace toute la liste (chargement complet boot/idle).
+//  - merge=true  : met a jour les matchs existants par matchId et ajoute les
+//                  nouveaux (rafraichissement live leger), sans perdre la liste
+//                  complete de la competition.
+static bool parseScoreboard(const char* url, bool merge) {
+    DBG("[API] Fetching scoreboard (%s)...\n", merge ? "live" : "complet");
 
     // Filtre en PSRAM : ne garde que les champs utiles (economise la RAM)
     JsonDocument filter(&psramAlloc);
@@ -143,7 +148,7 @@ bool EspnApi::fetchScoreboard() {
     filter["events"][0]["competitions"][0]["notes"][0]["headline"]     = true;
 
     JsonDocument doc(&psramAlloc);
-    if (!fetchJson(API_SCOREBOARD_URL, doc, filter)) return false;
+    if (!fetchJson(url, doc, filter)) return false;
 
     JsonArray events = doc["events"];
     DBG("[API] Evenements apres filtre: %d\n", (int)events.size());
@@ -196,12 +201,36 @@ bool EspnApi::fetchScoreboard() {
         newMatches.push_back(m);
     }
 
-    detectNewGoals(gCtx.matches, newMatches);
-    gCtx.matches     = newMatches;
-    gCtx.dataReady   = true;
+    // Detection de buts (compare ancien etat vs nouveau) -> popups
+    EspnApi::detectNewGoals(gCtx.matches, newMatches);
+
+    if (merge) {
+        // Met a jour les matchs existants (par matchId), ajoute les nouveaux.
+        for (const auto& nm : newMatches) {
+            bool found = false;
+            for (auto& em : gCtx.matches) {
+                if (em.matchId == nm.matchId) { em = nm; found = true; break; }
+            }
+            if (!found) gCtx.matches.push_back(nm);
+        }
+        DBG("[API] Scoreboard live: %d matchs maj (%d total)\n",
+            (int)newMatches.size(), (int)gCtx.matches.size());
+    } else {
+        gCtx.matches = newMatches;
+        DBG("[API] Scoreboard: %d matches loaded\n", (int)gCtx.matches.size());
+    }
+
+    gCtx.dataReady       = true;
     gCtx.needsFullRedraw = true;
-    DBG("[API] Scoreboard: %d matches loaded\n", (int)gCtx.matches.size());
     return true;
+}
+
+bool EspnApi::fetchScoreboard() {
+    return parseScoreboard(API_SCOREBOARD_URL, false);       // complet
+}
+
+bool EspnApi::fetchLiveScoreboard() {
+    return parseScoreboard(API_SCOREBOARD_LIVE_URL, true);   // leger + fusion
 }
 
 // ============================================================

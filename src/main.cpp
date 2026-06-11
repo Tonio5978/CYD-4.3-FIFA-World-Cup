@@ -135,10 +135,14 @@ void loop() {
     if (gCtx.wifiConnected) {
         if (now - gCtx.lastScoreboardFetch > getScoreboardInterval()) {
             gCtx.lastScoreboardFetch = now;
+            bool live = EspnApi::hasLiveMatch();
             DBG("[API] Scoreboard refresh (live=%s interval=%lus)\n",
-                EspnApi::hasLiveMatch() ? "oui" : "non",
+                live ? "oui" : "non",
                 (unsigned long)getScoreboardInterval() / 1000);
-            EspnApi::fetchScoreboard();
+            // En live : refresh leger du jour (fusion) pour ne pas bloquer le
+            // tactile. Sinon : rechargement complet de la competition.
+            if (live) EspnApi::fetchLiveScoreboard();
+            else      EspnApi::fetchScoreboard();
             // Switch home state based on live matches
             if (gCtx.appState == STATE_HOME_LIVE || gCtx.appState == STATE_HOME_NEXT) {
                 AppState newState = EspnApi::hasLiveMatch()
@@ -162,13 +166,19 @@ void loop() {
         UI::updateGoalPopup();
     }
 
+    // Tant qu'une popup de but est affichee, on suspend tout rendu d'ecran
+    // (sinon il dessinerait par-dessus/dessous -> scintillement).
+    bool popupActive = (gCtx.popupState != POPUP_NONE);
+
     // 4. Full redraw if needed
-    if (gCtx.needsFullRedraw) {
+    if (gCtx.needsFullRedraw && !popupActive) {
         renderCurrentScreen();
     }
 
     // 5. Partial updates (clock, live dot)
-    updateCurrentScreen();
+    if (!popupActive) {
+        updateCurrentScreen();
+    }
 
     // 6. Touch
     int tx, ty;

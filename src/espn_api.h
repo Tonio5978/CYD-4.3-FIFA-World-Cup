@@ -2,9 +2,14 @@
 #include "../include/screens.h"
 
 namespace EspnApi {
-    // Fetch & parse live scoreboard into gCtx.matches.
-    // Returns true on success.
+    // Fetch & parse the FULL competition scoreboard (104 matchs) into
+    // gCtx.matches (replaces the list). Used at boot and when idle.
     bool fetchScoreboard();
+
+    // Fetch the light "today" scoreboard and MERGE updates into gCtx.matches
+    // (by matchId). Used for the 10 s live refresh to avoid re-downloading
+    // the whole competition (which froze the touch input).
+    bool fetchLiveScoreboard();
 
     // Fetch & parse group standings into gCtx.standings.
     bool fetchStandings();

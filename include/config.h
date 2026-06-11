@@ -17,8 +17,13 @@
 // ============================================================
 // ESPN API
 // ============================================================
+// Liste complete de la competition (104 matchs, ~760 Ko) – boot + idle
 #define API_SCOREBOARD_URL \
     "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?limit=950&dates=20260611-20260720"
+// Scoreboard du jour uniquement (leger) – rafraichissement live toutes les 10 s.
+// Evite de re-telecharger toute la competition (bloquait le tactile).
+#define API_SCOREBOARD_LIVE_URL \
+    "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard"
 #define API_STANDINGS_URL \
     "https://site.web.api.espn.com/apis/v2/sports/soccer/fifa.world/standings"
 
