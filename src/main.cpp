@@ -23,18 +23,30 @@ AppContext gCtx;
 // API refresh interval (adaptive)
 // ============================================================
 static uint32_t getScoreboardInterval() {
-    return EspnApi::hasLiveMatch()
-        ? API_REFRESH_LIVE_MS
-        : API_REFRESH_IDLE_MS;
+    if (EspnApi::hasLiveMatch())                       return API_REFRESH_LIVE_MS;     // 10 s
+    if (EspnApi::hasImminentMatch(PRELIVE_WINDOW_SEC)) return API_REFRESH_PRELIVE_MS;  // 30 s (pre-live)
+    return API_REFRESH_IDLE_MS;                                                        // 5 min
+}
+
+// Etat home a adopter selon les donnees (live > pre-live > prochains)
+static AppState homeStateNow() {
+    if (EspnApi::hasLiveMatch())                       return STATE_HOME_LIVE;
+    if (EspnApi::hasImminentMatch(PRELIVE_WINDOW_SEC)) return STATE_HOME_PRELIVE;
+    return STATE_HOME_NEXT;
+}
+
+static bool isHomeState(AppState s) {
+    return s == STATE_HOME_LIVE || s == STATE_HOME_PRELIVE || s == STATE_HOME_NEXT;
 }
 
 static const char* stateName(AppState s) {
     switch (s) {
-        case STATE_SPLASH:    return "SPLASH";
-        case STATE_HOME_LIVE: return "HOME_LIVE";
-        case STATE_HOME_NEXT: return "HOME_NEXT";
-        case STATE_GROUP:     return "GROUP";
-        default:              return "?";
+        case STATE_SPLASH:      return "SPLASH";
+        case STATE_HOME_LIVE:   return "HOME_LIVE";
+        case STATE_HOME_PRELIVE:return "HOME_PRELIVE";
+        case STATE_HOME_NEXT:   return "HOME_NEXT";
+        case STATE_GROUP:       return "GROUP";
+        default:                return "?";
     }
 }
 
@@ -45,6 +57,7 @@ static void renderCurrentScreen() {
     switch (gCtx.appState) {
         case STATE_SPLASH:   ScreenSplash::draw(); break;
         case STATE_HOME_LIVE:
+        case STATE_HOME_PRELIVE:
         case STATE_HOME_NEXT: ScreenHome::draw();  break;
         case STATE_GROUP:    ScreenGroup::draw();  break;
     }
@@ -55,6 +68,7 @@ static void updateCurrentScreen() {
     switch (gCtx.appState) {
         case STATE_SPLASH:    ScreenSplash::update(); break;
         case STATE_HOME_LIVE:
+        case STATE_HOME_PRELIVE:
         case STATE_HOME_NEXT: ScreenHome::update();   break;
         case STATE_GROUP:     ScreenGroup::update();  break;
     }
@@ -109,7 +123,7 @@ void setup() {
     }
 
     // Transition from splash
-    AppState initialState = EspnApi::hasLiveMatch() ? STATE_HOME_LIVE : STATE_HOME_NEXT;
+    AppState initialState = homeStateNow();
     gCtx.appState = initialState;
     gCtx.needsFullRedraw = true;
     DBG("[STATE] -> %s\n", stateName(initialState));
@@ -135,18 +149,18 @@ void loop() {
     if (gCtx.wifiConnected) {
         if (now - gCtx.lastScoreboardFetch > getScoreboardInterval()) {
             gCtx.lastScoreboardFetch = now;
-            bool live = EspnApi::hasLiveMatch();
-            DBG("[API] Scoreboard refresh (live=%s interval=%lus)\n",
-                live ? "oui" : "non",
+            // Live OU pre-live : refresh leger du jour (fusion) pour ne pas
+            // bloquer le tactile. Sinon (idle) : rechargement complet.
+            bool light = EspnApi::hasLiveMatch()
+                      || EspnApi::hasImminentMatch(PRELIVE_WINDOW_SEC);
+            DBG("[API] Scoreboard refresh (%s interval=%lus)\n",
+                light ? "leger" : "complet",
                 (unsigned long)getScoreboardInterval() / 1000);
-            // En live : refresh leger du jour (fusion) pour ne pas bloquer le
-            // tactile. Sinon : rechargement complet de la competition.
-            if (live) EspnApi::fetchLiveScoreboard();
-            else      EspnApi::fetchScoreboard();
-            // Switch home state based on live matches
-            if (gCtx.appState == STATE_HOME_LIVE || gCtx.appState == STATE_HOME_NEXT) {
-                AppState newState = EspnApi::hasLiveMatch()
-                    ? STATE_HOME_LIVE : STATE_HOME_NEXT;
+            if (light) EspnApi::fetchLiveScoreboard();
+            else       EspnApi::fetchScoreboard();
+            // Bascule d'etat home : live > pre-live > prochains
+            if (isHomeState(gCtx.appState)) {
+                AppState newState = homeStateNow();
                 if (newState != gCtx.appState) {
                     DBG("[STATE] %s -> %s\n", stateName(gCtx.appState), stateName(newState));
                     gCtx.appState = newState;

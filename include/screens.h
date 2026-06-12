@@ -10,6 +10,7 @@
 enum AppState {
     STATE_SPLASH,
     STATE_HOME_LIVE,    // live matches
+    STATE_HOME_PRELIVE, // en attente d'un match imminent (<5 min)
     STATE_HOME_NEXT,    // upcoming matches
     STATE_GROUP         // group standings (groupIndex 0-15)
 };

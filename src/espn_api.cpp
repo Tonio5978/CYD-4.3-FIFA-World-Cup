@@ -1,8 +1,10 @@
 #include "espn_api.h"
+#include "ntp_time.h"
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <algorithm>
+#include <time.h>
 #include "../include/config.h"
 
 // ============================================================
@@ -393,6 +395,19 @@ bool EspnApi::fetchStandings() {
 bool EspnApi::hasLiveMatch() {
     for (const auto& m : gCtx.matches) {
         if (m.status == "in") return true;
+    }
+    return false;
+}
+
+bool EspnApi::hasImminentMatch(uint32_t withinSec) {
+    time_t now = time(nullptr);
+    if (now < 1000000000) return false;   // horloge pas encore synchronisee
+    for (const auto& m : gCtx.matches) {
+        if (m.status != "pre") continue;
+        time_t k = NtpTime::isoToEpochUtc(m.date);
+        if (k == 0) continue;
+        long diff = (long)(k - now);
+        if (diff >= 0 && diff <= (long)withinSec) return true;
     }
     return false;
 }

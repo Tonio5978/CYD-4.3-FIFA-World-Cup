@@ -14,4 +14,8 @@ namespace NtpTime {
     // local configure (NTP_TIMEZONE, DST inclus).
     String localTimeFromIso(const String& isoUtc);  // "21:00" ou "--:--"
     String localDateFromIso(const String& isoUtc);  // "11 Juin 2026" ou ""
+
+    // Date ISO UTC -> epoch UTC (secondes). 0 si invalide. Pour comparer a
+    // l'heure courante (time(nullptr)) independamment du fuseau.
+    time_t isoToEpochUtc(const String& isoUtc);
 }

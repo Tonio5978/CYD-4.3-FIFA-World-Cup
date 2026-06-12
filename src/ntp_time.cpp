@@ -101,3 +101,14 @@ String NtpTime::localDateFromIso(const String& isoUtc) {
     if (!isoToLocalTm(isoUtc, lt)) return "";
     return formatDate(lt);
 }
+
+time_t NtpTime::isoToEpochUtc(const String& iso) {
+    if (iso.length() < 16) return 0;
+    return timegmPortable(
+        iso.substring(0, 4).toInt(),
+        iso.substring(5, 7).toInt(),
+        iso.substring(8, 10).toInt(),
+        iso.substring(11, 13).toInt(),
+        iso.substring(14, 16).toInt(),
+        0);
+}

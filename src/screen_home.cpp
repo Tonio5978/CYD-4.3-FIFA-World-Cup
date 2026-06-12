@@ -182,8 +182,11 @@ void ScreenHome::draw() {
     DBG("[HOME] Draw: %d live, %d total\n",
         (int)live.size(), (int)gCtx.matches.size());
 
-    UI::drawHeader(hasLive ? "LIVE" : "PROCHAINS MATCHS",
-                   hasLive ? ">" : "o");
+    bool preLive = !hasLive && (gCtx.appState == STATE_HOME_PRELIVE);
+    const char* hdr = hasLive ? "LIVE"
+                    : preLive ? "PRE-LIVE - EN ATTENTE"
+                              : "PROCHAINS MATCHS";
+    UI::drawHeader(hdr, hasLive ? ">" : "o");
     UI::drawFooter(gCtx.activeGroupIndex);
 
     int y = CONTENT_Y + CARD_PAD;
@@ -259,7 +262,10 @@ void ScreenHome::update() {
         _lastDotToggleMs = millis();
         _liveDotVisible = !_liveDotVisible;
         // Re-draw header to update clock
-        UI::drawHeader(EspnApi::hasLiveMatch() ? "LIVE" : "PROCHAINS MATCHS",
-                       EspnApi::hasLiveMatch() ? ">" : "o");
+        bool hasLive = EspnApi::hasLiveMatch();
+        const char* hdr = hasLive ? "LIVE"
+                        : (gCtx.appState == STATE_HOME_PRELIVE) ? "PRE-LIVE - EN ATTENTE"
+                                                                : "PROCHAINS MATCHS";
+        UI::drawHeader(hdr, hasLive ? ">" : "o");
     }
 }

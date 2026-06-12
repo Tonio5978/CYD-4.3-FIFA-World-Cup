@@ -17,6 +17,10 @@ namespace EspnApi {
     // Returns true if at least one match has status "in".
     bool hasLiveMatch();
 
+    // Returns true if a "pre" match kicks off within `withinSec` seconds
+    // (requires NTP clock). Used to enter the PRE-LIVE mode before kickoff.
+    bool hasImminentMatch(uint32_t withinSec);
+
     // Compare old vs new match list and enqueue goal popups.
     void detectNewGoals(const std::vector<Match>& oldMatches,
                         const std::vector<Match>& newMatches);

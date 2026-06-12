@@ -28,9 +28,14 @@
     "https://site.web.api.espn.com/apis/v2/sports/soccer/fifa.world/standings"
 
 #define API_REFRESH_LIVE_MS      10000UL    // 10 s when match in progress
+#define API_REFRESH_PRELIVE_MS   30000UL    // 30 s : fenetre PRE-LIVE (avant coup d'envoi)
 #define API_REFRESH_IDLE_MS     300000UL    // 5 min when no live match
 #define API_REFRESH_STANDINGS_MS 600000UL   // 10 min
 #define HTTP_TIMEOUT_MS          15000
+
+// Fenetre PRE-LIVE : on passe en attente du match ce nombre de secondes
+// avant le coup d'envoi programme (puis LIVE des que le match demarre).
+#define PRELIVE_WINDOW_SEC       300        // 5 minutes
 
 // ============================================================
 // Display
