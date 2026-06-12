@@ -12,5 +12,9 @@ namespace Storage {
     bool loadFlagRGB565(const String& teamCode, uint16_t* outBuf, int w, int h,
                         bool large = false);
 
+    // Load any PNG from LittleFS into a caller-supplied PSRAM buffer (w*h*2),
+    // rescaling to w x h if needed. e.g. "/logo.png".
+    bool loadImageRGB565(const String& path, uint16_t* outBuf, int w, int h);
+
     bool exists(const String& path);
 }

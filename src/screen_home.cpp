@@ -198,6 +198,20 @@ void ScreenHome::draw() {
             drawn++;
         }
         DBG("[HOME] %d carte(s) live affichee(s)\n", drawn);
+
+        // Prochaine rencontre sous le(s) match(s) en cours, si la place le permet
+        auto upcoming = getUpcomingMatches();
+        if (!upcoming.empty() && y + 24 + 80 <= maxY) {
+            const Match* nm = upcoming.front();
+            String label = "PROCHAIN MATCH";
+            String d = NtpTime::localDateFromIso(nm->date);
+            if (!d.isEmpty()) label += "  -  " + d;
+            gfx.setTextDatum(lgfx::middle_left);
+            gfx.setTextColor(gfx.color565(0xFF, 0xD7, 0x00));
+            gfx.drawString(label.c_str(), CARD_X, y + 12, &fonts::FreeSansBold9pt7b);
+            y += 24;
+            drawMatchCardNext(*nm, y);
+        }
     } else {
         auto upcoming = getUpcomingMatches();
         DBG("[HOME] %d matchs a venir\n", (int)upcoming.size());

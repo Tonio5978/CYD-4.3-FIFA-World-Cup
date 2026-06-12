@@ -68,16 +68,11 @@ bool Storage::begin() {
 
 bool Storage::isReady() { return _ready; }
 
-bool Storage::loadFlagRGB565(const String& teamCode, uint16_t* outBuf, int w, int h,
-                             bool large) {
+bool Storage::loadImageRGB565(const String& path, uint16_t* outBuf, int w, int h) {
     if (!_ready) return false;
 
-    String path = large
-        ? String(FLAG_DIR) + "/large/" + teamCode + ".png"
-        : String(FLAG_DIR) + "/" + teamCode + ".png";
-
     if (!LittleFS.exists(path)) {
-        DBG("[FS] Flag not found: %s\n", path.c_str());
+        DBG("[FS] Image not found: %s\n", path.c_str());
         return false;
     }
 
@@ -108,7 +103,7 @@ bool Storage::loadFlagRGB565(const String& teamCode, uint16_t* outBuf, int w, in
                                                 MALLOC_CAP_SPIRAM);
     if (!tmp) {
         DBG("[FS] No PSRAM for %dx%d scale buffer (%s)\n", nativeW, nativeH,
-            teamCode.c_str());
+            path.c_str());
         _png.close();
         return false;
     }
@@ -133,6 +128,14 @@ bool Storage::loadFlagRGB565(const String& teamCode, uint16_t* outBuf, int w, in
 
     heap_caps_free(tmp);
     return rc == PNG_SUCCESS;
+}
+
+bool Storage::loadFlagRGB565(const String& teamCode, uint16_t* outBuf, int w, int h,
+                             bool large) {
+    String path = large
+        ? String(FLAG_DIR) + "/large/" + teamCode + ".png"
+        : String(FLAG_DIR) + "/" + teamCode + ".png";
+    return loadImageRGB565(path, outBuf, w, h);
 }
 
 bool Storage::exists(const String& path) {

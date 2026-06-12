@@ -2,6 +2,7 @@
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
+#include <algorithm>
 #include "../include/config.h"
 
 // ============================================================
@@ -22,6 +23,91 @@ struct PsramAllocator : ArduinoJson::Allocator {
     }
 };
 static PsramAllocator psramAlloc;
+
+// ============================================================
+// Translitteration UTF-8 -> ASCII
+// Les polices Adafruit GFX (FreeSans...) n'ont pas les glyphes
+// accentues. Les noms ESPN arrivent en UTF-8 (Julián, Quiñones,
+// Türkiye, Curaçao...). On remplace les accents par leur base
+// ASCII pour un rendu propre, coherent avec l'UI sans accents.
+// ============================================================
+
+static const char* mapCp(uint32_t cp) {
+    switch (cp) {
+        // Latin-1 Supplement
+        case 0xC0: case 0xC1: case 0xC2: case 0xC3: case 0xC4: case 0xC5: return "A";
+        case 0xC6: return "AE";
+        case 0xC7: return "C";
+        case 0xC8: case 0xC9: case 0xCA: case 0xCB: return "E";
+        case 0xCC: case 0xCD: case 0xCE: case 0xCF: return "I";
+        case 0xD0: return "D";
+        case 0xD1: return "N";
+        case 0xD2: case 0xD3: case 0xD4: case 0xD5: case 0xD6: case 0xD8: return "O";
+        case 0xD9: case 0xDA: case 0xDB: case 0xDC: return "U";
+        case 0xDD: return "Y";
+        case 0xDF: return "ss";
+        case 0xE0: case 0xE1: case 0xE2: case 0xE3: case 0xE4: case 0xE5: return "a";
+        case 0xE6: return "ae";
+        case 0xE7: return "c";
+        case 0xE8: case 0xE9: case 0xEA: case 0xEB: return "e";
+        case 0xEC: case 0xED: case 0xEE: case 0xEF: return "i";
+        case 0xF0: return "d";
+        case 0xF1: return "n";
+        case 0xF2: case 0xF3: case 0xF4: case 0xF5: case 0xF6: case 0xF8: return "o";
+        case 0xF9: case 0xFA: case 0xFB: case 0xFC: return "u";
+        case 0xFD: case 0xFF: return "y";
+        // Latin Extended-A (croate, tcheque, polonais, turc...)
+        case 0x100: case 0x102: case 0x104: return "A";
+        case 0x101: case 0x103: case 0x105: return "a";
+        case 0x106: case 0x108: case 0x10A: case 0x10C: return "C";
+        case 0x107: case 0x109: case 0x10B: case 0x10D: return "c";
+        case 0x10E: case 0x110: return "D";
+        case 0x10F: case 0x111: return "d";
+        case 0x112: case 0x114: case 0x116: case 0x118: case 0x11A: return "E";
+        case 0x113: case 0x115: case 0x117: case 0x119: case 0x11B: return "e";
+        case 0x11C: case 0x11E: case 0x120: case 0x122: return "G";
+        case 0x11D: case 0x11F: case 0x121: case 0x123: return "g";
+        case 0x130: return "I";
+        case 0x131: return "i";
+        case 0x141: return "L";
+        case 0x142: return "l";
+        case 0x143: case 0x145: case 0x147: return "N";
+        case 0x144: case 0x146: case 0x148: return "n";
+        case 0x14C: case 0x14E: case 0x150: return "O";
+        case 0x14D: case 0x14F: case 0x151: return "o";
+        case 0x154: case 0x156: case 0x158: return "R";
+        case 0x155: case 0x157: case 0x159: return "r";
+        case 0x15A: case 0x15C: case 0x15E: case 0x160: return "S";
+        case 0x15B: case 0x15D: case 0x15F: case 0x161: return "s";
+        case 0x162: case 0x164: case 0x166: return "T";
+        case 0x163: case 0x165: case 0x167: return "t";
+        case 0x168: case 0x16A: case 0x16C: case 0x16E: case 0x170: case 0x172: return "U";
+        case 0x169: case 0x16B: case 0x16D: case 0x16F: case 0x171: case 0x173: return "u";
+        case 0x179: case 0x17B: case 0x17D: return "Z";
+        case 0x17A: case 0x17C: case 0x17E: return "z";
+        default: return "?";
+    }
+}
+
+static String deaccent(const String& in) {
+    String out;
+    out.reserve(in.length());
+    const uint8_t* s = (const uint8_t*)in.c_str();
+    int n = (int)in.length();
+    for (int i = 0; i < n; ) {
+        uint8_t c = s[i];
+        if (c < 0x80) { out += (char)c; i++; continue; }
+        uint32_t cp; int len;
+        if ((c & 0xE0) == 0xC0 && i + 1 < n) {
+            cp = ((c & 0x1F) << 6) | (s[i+1] & 0x3F); len = 2;
+        } else if ((c & 0xF0) == 0xE0 && i + 2 < n) {
+            cp = ((c & 0x0F) << 12) | ((s[i+1] & 0x3F) << 6) | (s[i+2] & 0x3F); len = 3;
+        } else { i++; continue; }   // octet invalide -> ignore
+        out += mapCp(cp);
+        i += len;
+    }
+    return out;
+}
 
 // ============================================================
 // Flux bloquant : enveloppe le WiFiClient pour qu'un read()/peek()
@@ -97,17 +183,21 @@ static bool fetchJson(const char* url, JsonDocument& doc, JsonDocument& filter) 
 static std::vector<Goal> parseGoals(JsonArray details, const String& teamId) {
     std::vector<Goal> goals;
     for (JsonObject detail : details) {
+        // "scoringPlay" est vrai pour TOUTES les variantes de but (Goal,
+        // Goal - Header, Penalty - Scored, Goal - Free-kick, Own Goal...).
+        // On s'appuie dessus plutot que sur le libelle exact, qui variait
+        // et faisait manquer les buts de la tete / penalty / coup franc.
+        if (!(detail["scoringPlay"] | false)) continue;
+
         const char* typeText = detail["type"]["text"] | "";
-        bool isGoal    = strcmp(typeText, "Goal")     == 0;
-        bool isOwnGoal = strcmp(typeText, "Own Goal") == 0;
-        if (!isGoal && !isOwnGoal) continue;
+        bool isOwnGoal = (strstr(typeText, "Own Goal") != nullptr);
 
         const char* detailTeamId = detail["team"]["id"] | "";
         if (String(detailTeamId) != teamId) continue;
 
         Goal g;
         g.isOwnGoal  = isOwnGoal;
-        g.playerName = detail["athletesInvolved"][0]["displayName"] | "Unknown";
+        g.playerName = deaccent(detail["athletesInvolved"][0]["displayName"] | "Unknown");
         g.minute     = detail["clock"]["displayValue"] | "";
         goals.push_back(g);
     }
@@ -173,8 +263,8 @@ static bool parseScoreboard(const char* url, bool merge) {
         m.period       = status["period"] | 0;
 
         JsonObject comp = ev["competitions"][0];
-        m.venueName = comp["venue"]["fullName"] | "";
-        m.venueCity = comp["venue"]["address"]["city"] | "";
+        m.venueName = deaccent(comp["venue"]["fullName"] | "");
+        m.venueCity = deaccent(comp["venue"]["address"]["city"] | "");
         m.group     = comp["notes"][0]["headline"] | "";
 
         JsonArray competitors = comp["competitors"];
@@ -182,7 +272,7 @@ static bool parseScoreboard(const char* url, bool merge) {
             bool isHome = strcmp(team["homeAway"] | "", "home") == 0;
             String id   = team["team"]["id"] | "";
             String abbr = team["team"]["abbreviation"] | "";
-            String name = team["team"]["displayName"] | "";
+            String name = deaccent(team["team"]["displayName"] | "");
             int score   = atoi(team["score"] | "0");
 
             if (isHome) {
@@ -262,12 +352,15 @@ bool EspnApi::fetchStandings() {
         for (JsonObject entry : entries) {
             TeamStanding ts;
             ts.teamCode = entry["team"]["abbreviation"] | "";
-            ts.teamName = entry["team"]["displayName"]  | "";
+            ts.teamName = deaccent(entry["team"]["displayName"]  | "");
 
             JsonArray stats = entry["stats"];
             for (JsonObject stat : stats) {
                 const char* name = stat["name"] | "";
-                int          val = stat["value"] | 0;
+                // Les valeurs ESPN sont des flottants ("3.0"). "| 0" echoue
+                // (is<int>() est faux pour un flottant) et renvoyait 0 ->
+                // classement toujours a zero. On lit en flottant puis on caste.
+                int          val = (int)lround(stat["value"] | 0.0);
                 if      (strcmp(name, "rank")              == 0) ts.rank         = val;
                 else if (strcmp(name, "points")            == 0) ts.points       = val;
                 else if (strcmp(name, "gamesPlayed")       == 0) ts.played       = val;
@@ -280,6 +373,11 @@ bool EspnApi::fetchStandings() {
             }
             gs.teams.push_back(ts);
         }
+        // Tri par position au classement (rank croissant)
+        std::sort(gs.teams.begin(), gs.teams.end(),
+                  [](const TeamStanding& a, const TeamStanding& b) {
+                      return a.rank < b.rank;
+                  });
         groups.push_back(gs);
     }
 

@@ -82,11 +82,11 @@ void setup() {
     gfx.fillScreen(TFT_BLACK);
     DBG("[DISP] Display init OK – 800x480, brightness=200\n");
 
+    // Storage (monte LittleFS) AVANT le splash pour que le logo s'affiche
+    Storage::begin();
+
     // Splash screen – show immediately before network calls
     ScreenSplash::draw();
-
-    // Storage
-    Storage::begin();
 
     // WiFi
     WifiManager::begin();
