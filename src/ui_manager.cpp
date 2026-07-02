@@ -1,6 +1,11 @@
 #include "ui_manager.h"
 #include "storage.h"
 #include "ntp_time.h"
+#include "espn_api.h"
+
+// Zone tactile de l'icone coupe (acces bracket) dans le bandeau.
+static const int TROPHY_CX  = SCREEN_WIDTH - 120;
+static const int TROPHY_HALF = 22;   // demi-largeur de la zone de touche
 
 // ============================================================
 // Flag cache (LRU, PSRAM-backed pixel buffers)
@@ -67,6 +72,24 @@ static uint16_t* getCachedFlag(const String& code, int w, int h, bool large = fa
 // Header / Footer
 // ============================================================
 
+// Petite coupe (trophee) dessinee en primitives, doree.
+static void drawTrophyIcon(int cx, int cy) {
+    uint16_t gold = gfx.color565(0xFF, 0xD7, 0x00);
+    gfx.fillRect(cx - 10, cy - 11, 20, 3, gold);            // rebord
+    gfx.fillTriangle(cx - 9, cy - 8, cx + 9, cy - 8, cx, cy + 2, gold); // vasque
+    gfx.drawCircle(cx - 11, cy - 6, 4, gold);              // anse gauche
+    gfx.drawCircle(cx + 11, cy - 6, 4, gold);              // anse droite
+    gfx.fillRect(cx - 1, cy + 2, 3, 6, gold);              // pied
+    gfx.fillRect(cx - 7, cy + 8, 15, 3, gold);             // base
+}
+
+bool UI::isTrophyTouch(int tx, int ty) {
+    if (ty >= HEADER_H) return false;
+    if (gCtx.appState == STATE_BRACKET) return false;
+    if (!EspnApi::hasKnockoutMatches()) return false;
+    return tx >= TROPHY_CX - TROPHY_HALF && tx <= TROPHY_CX + TROPHY_HALF;
+}
+
 void UI::drawHeader(const String& label, const String& icon) {
     gfx.fillRect(0, 0, SCREEN_WIDTH, HEADER_H, gfx.color565(0, 63, 127));
     gfx.setTextColor(TFT_WHITE, gfx.color565(0, 63, 127));
@@ -90,6 +113,11 @@ void UI::drawHeader(const String& label, const String& icon) {
     gfx.setTextDatum(lgfx::middle_right);
     String wifiIcon = gCtx.wifiConnected ? "WiFi" : "No WiFi";
     gfx.drawString(wifiIcon.c_str(), SCREEN_WIDTH - 12, HEADER_H / 2, &fonts::FreeSans9pt7b);
+
+    // Icone coupe (acces bracket) si phase finale en cours et hors bracket
+    if (gCtx.appState != STATE_BRACKET && EspnApi::hasKnockoutMatches()) {
+        drawTrophyIcon(TROPHY_CX, HEADER_H / 2);
+    }
 }
 
 void UI::drawFooter(int activeGroupIdx) {

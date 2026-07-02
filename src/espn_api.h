@@ -21,6 +21,9 @@ namespace EspnApi {
     // (requires NTP clock). Used to enter the PRE-LIVE mode before kickoff.
     bool hasImminentMatch(uint32_t withinSec);
 
+    // Returns true if at least one knockout match exists (round != group-stage).
+    bool hasKnockoutMatches();
+
     // Compare old vs new match list and enqueue goal popups.
     void detectNewGoals(const std::vector<Match>& oldMatches,
                         const std::vector<Match>& newMatches);

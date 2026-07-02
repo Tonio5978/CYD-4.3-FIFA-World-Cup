@@ -12,7 +12,8 @@ enum AppState {
     STATE_HOME_LIVE,    // live matches
     STATE_HOME_PRELIVE, // en attente d'un match imminent (<5 min)
     STATE_HOME_NEXT,    // upcoming matches
-    STATE_GROUP         // group standings (groupIndex 0-15)
+    STATE_GROUP,        // group standings (groupIndex 0-15)
+    STATE_BRACKET       // knockout bracket (view 0=arbre final, 1-4=regions)
 };
 
 enum PopupState {
@@ -49,6 +50,10 @@ struct Match {
     String venueCity;
     String date;            // ISO "2026-06-11T18:00:00Z"
     String group;           // "Group A"
+    String round;           // season.slug: "group-stage","round-of-32",
+                            // "round-of-16","quarterfinals","semifinals",
+                            // "3rd-place-match","final"
+    String note;            // notes[0].headline (ex. "X advance 4-3 on penalties")
     std::vector<Goal> homeGoals;
     std::vector<Goal> awayGoals;
     uint32_t lastUpdateMs = 0;
@@ -98,6 +103,9 @@ struct AppContext {
 
     // Active group index for STATE_GROUP (0 = Group A, … 15 = Group P)
     int activeGroupIndex = 0;
+
+    // Vue du bracket : 0 = arbre final (1/4->finale), 1-4 = regions (32es->1/4)
+    int bracketView = 0;
 
     // Timestamps
     uint32_t lastScoreboardFetch   = 0;

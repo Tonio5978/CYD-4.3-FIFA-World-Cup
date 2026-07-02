@@ -5,6 +5,7 @@
 #include "ntp_time.h"
 #include "../include/config.h"
 #include "../include/screens.h"
+#include <algorithm>
 
 // ============================================================
 // Match card layout constants
@@ -162,12 +163,33 @@ static std::vector<const Match*> getLiveMatches() {
     return v;
 }
 
+static bool codeHasDigit(const String& s) {
+    for (size_t i = 0; i < s.length(); i++)
+        if (s[i] >= '0' && s[i] <= '9') return true;
+    return false;
+}
+
+// Equipe identifiee = code non vide et sans chiffre (les placeholders
+// du bracket sont "RD32", "QFW1", "RD16 W1"... -> contiennent un chiffre).
+static bool bothTeamsIdentified(const Match& m) {
+    return !m.homeTeam.isEmpty() && !m.awayTeam.isEmpty() &&
+           !codeHasDigit(m.homeTeam) && !codeHasDigit(m.awayTeam);
+}
+
+// Prochains matchs dont les 2 equipes sont identifiees, tries par date.
 static std::vector<const Match*> getUpcomingMatches() {
     std::vector<const Match*> v;
     for (const auto& m : gCtx.matches)
-        if (m.status == "pre") v.push_back(&m);
+        if (m.status == "pre" && bothTeamsIdentified(m)) v.push_back(&m);
+    std::sort(v.begin(), v.end(), [](const Match* a, const Match* b) {
+        return a->date < b->date;
+    });
     return v;
 }
+
+// Defilement vertical de la liste des prochains matchs (en pixels).
+static int _upScrollY   = 0;
+static int _upMaxScroll = 0;
 
 // ============================================================
 // Public
@@ -216,41 +238,78 @@ void ScreenHome::draw() {
             drawMatchCardNext(*nm, y);
         }
     } else {
+        // Prochains matchs (2 equipes identifiees) : disposition en cartes
+        // avec sections par jour + DEFILEMENT vertical (dérouler).
         auto upcoming = getUpcomingMatches();
-        DBG("[HOME] %d matchs a venir\n", (int)upcoming.size());
+        DBG("[HOME] %d matchs a venir (2 equipes connues)\n", (int)upcoming.size());
 
-        // Sections par jour : un en-tete de date dore au-dessus de chaque
-        // groupe de matchs du meme jour (la date du 1er jour est donc
-        // toujours affichee). Heures/dates en fuseau local.
-        const int DATE_H = 24;
-        String lastDate = "";
-        for (const Match* m : upcoming) {
-            String d = NtpTime::localDateFromIso(m->date);
-            bool newDay = (d != lastDate);
-            int needed = (newDay ? DATE_H : 0) + 80;
-            if (y + needed > maxY) break;
-
-            if (newDay) {
-                gfx.setTextDatum(lgfx::middle_center);
-                gfx.setTextColor(gfx.color565(0xFF, 0xD7, 0x00));
-                gfx.drawString(d.c_str(), SCREEN_WIDTH / 2, y + 12,
-                               &fonts::FreeSansBold9pt7b);
-                y += DATE_H;
-                lastDate = d;
-            }
-
-            drawMatchCardNext(*m, y);
-            y += 80 + CARD_GAP;
-            drawn++;
-        }
         if (upcoming.empty()) {
             gfx.setTextDatum(lgfx::middle_center);
             gfx.setTextColor(gfx.color565(0xAA, 0xAA, 0xAA));
             gfx.drawString("Aucun match programme",
-                           SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2,
-                           &fonts::FreeSans9pt7b);
+                           SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, &fonts::FreeSans9pt7b);
+            _upScrollY = _upMaxScroll = 0;
+            return;
+        }
+
+        const int DATE_H  = 24;
+        const int CARD_STEP = 80 + CARD_GAP;
+        const int top = CONTENT_Y + CARD_PAD;
+        const int bot = SCREEN_HEIGHT - FOOTER_H - CARD_PAD;
+        const int visH = bot - top;
+
+        // Hauteur totale du contenu (cartes + en-tetes de jour)
+        int totalH = 0; String d0 = "";
+        for (const Match* m : upcoming) {
+            String d = NtpTime::localDateFromIso(m->date);
+            if (d != d0) { totalH += DATE_H; d0 = d; }
+            totalH += CARD_STEP;
+        }
+        _upMaxScroll = totalH > visH ? totalH - visH : 0;
+        if (_upScrollY > _upMaxScroll) _upScrollY = _upMaxScroll;
+        if (_upScrollY < 0) _upScrollY = 0;
+
+        // Rendu avec fenetre de decoupe (evite tout debordement hors zone)
+        gfx.setClipRect(0, top, SCREEN_WIDTH, visH);
+        int vy = 0; String lastDate = "";
+        for (const Match* m : upcoming) {
+            String d = NtpTime::localDateFromIso(m->date);
+            if (d != lastDate) {
+                int ay = top + vy - _upScrollY;
+                if (ay + DATE_H > top && ay < bot) {
+                    gfx.setTextDatum(lgfx::middle_center);
+                    gfx.setTextColor(gfx.color565(0xFF, 0xD7, 0x00));
+                    gfx.drawString(d.c_str(), SCREEN_WIDTH / 2, ay + 12,
+                                   &fonts::FreeSansBold9pt7b);
+                }
+                vy += DATE_H; lastDate = d;
+            }
+            int ay = top + vy - _upScrollY;
+            if (ay + 80 > top && ay < bot) drawMatchCardNext(*m, ay);
+            vy += CARD_STEP;
+            drawn++;
+        }
+        gfx.clearClipRect();
+
+        // Chevrons de defilement
+        gfx.setTextDatum(lgfx::middle_center);
+        if (_upScrollY > 0) {
+            gfx.setTextColor(gfx.color565(0xFF, 0xD7, 0x00), gfx.color565(26, 26, 26));
+            gfx.drawString("^", SCREEN_WIDTH - 16, top + 8, &fonts::FreeSansBold12pt7b);
+        }
+        if (_upScrollY < _upMaxScroll) {
+            gfx.setTextColor(gfx.color565(0xFF, 0xD7, 0x00), gfx.color565(26, 26, 26));
+            gfx.drawString("v", SCREEN_WIDTH - 16, bot - 10, &fonts::FreeSansBold12pt7b);
         }
     }
+}
+
+// Defilement de la liste des prochains matchs (appele depuis les tap-zones).
+void ScreenHome::scrollUpcoming(int deltaPx) {
+    _upScrollY += deltaPx;
+    if (_upScrollY < 0) _upScrollY = 0;
+    if (_upScrollY > _upMaxScroll) _upScrollY = _upMaxScroll;
+    gCtx.needsFullRedraw = true;
 }
 
 static bool _liveDotVisible = true;

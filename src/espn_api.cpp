@@ -220,8 +220,9 @@ static bool parseScoreboard(const char* url, bool merge) {
 
     // Filtre en PSRAM : ne garde que les champs utiles (economise la RAM)
     JsonDocument filter(&psramAlloc);
-    filter["events"][0]["id"]   = true;
-    filter["events"][0]["date"] = true;
+    filter["events"][0]["id"]           = true;
+    filter["events"][0]["date"]         = true;
+    filter["events"][0]["season"]["slug"] = true;
 
     filter["events"][0]["status"]["type"]["state"]       = true;
     filter["events"][0]["status"]["type"]["description"] = true;
@@ -257,6 +258,7 @@ static bool parseScoreboard(const char* url, bool merge) {
         Match m;
         m.matchId = ev["id"] | "";
         m.date    = ev["date"] | "";
+        m.round   = ev["season"]["slug"] | "";
 
         JsonObject status = ev["status"];
         m.status       = status["type"]["state"] | "pre";
@@ -268,6 +270,7 @@ static bool parseScoreboard(const char* url, bool merge) {
         m.venueName = deaccent(comp["venue"]["fullName"] | "");
         m.venueCity = deaccent(comp["venue"]["address"]["city"] | "");
         m.group     = comp["notes"][0]["headline"] | "";
+        m.note      = deaccent(comp["notes"][0]["headline"] | "");
 
         JsonArray competitors = comp["competitors"];
         for (JsonObject team : competitors) {
@@ -396,6 +399,12 @@ bool EspnApi::hasLiveMatch() {
     for (const auto& m : gCtx.matches) {
         if (m.status == "in") return true;
     }
+    return false;
+}
+
+bool EspnApi::hasKnockoutMatches() {
+    for (const auto& m : gCtx.matches)
+        if (!m.round.isEmpty() && m.round != "group-stage") return true;
     return false;
 }
 

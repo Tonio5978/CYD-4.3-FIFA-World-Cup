@@ -13,6 +13,7 @@ LGFX gfx;   // global display instance (declared extern in display_config.h)
 #include "screen_splash.h"
 #include "screen_home.h"
 #include "screen_group.h"
+#include "screen_bracket.h"
 #include "../include/screens.h"
 #include "../include/config.h"
 
@@ -46,6 +47,7 @@ static const char* stateName(AppState s) {
         case STATE_HOME_PRELIVE:return "HOME_PRELIVE";
         case STATE_HOME_NEXT:   return "HOME_NEXT";
         case STATE_GROUP:       return "GROUP";
+        case STATE_BRACKET:     return "BRACKET";
         default:                return "?";
     }
 }
@@ -60,6 +62,7 @@ static void renderCurrentScreen() {
         case STATE_HOME_PRELIVE:
         case STATE_HOME_NEXT: ScreenHome::draw();  break;
         case STATE_GROUP:    ScreenGroup::draw();  break;
+        case STATE_BRACKET:  ScreenBracket::draw(); break;
     }
     gCtx.needsFullRedraw = false;
 }
@@ -71,6 +74,7 @@ static void updateCurrentScreen() {
         case STATE_HOME_PRELIVE:
         case STATE_HOME_NEXT: ScreenHome::update();   break;
         case STATE_GROUP:     ScreenGroup::update();  break;
+        case STATE_BRACKET:   ScreenBracket::update(); break;
     }
 }
 
@@ -198,7 +202,36 @@ void loop() {
     int tx, ty;
     if (UI::getTap(tx, ty)) {
         DBG("[TOUCH] Tap (%d, %d) etat=%s\n", tx, ty, stateName(gCtx.appState));
-        UI::handleFooterTouch(tx, ty);
+
+        if (gCtx.appState == STATE_BRACKET) {
+            // Footer bracket : [< PRECEDENT] [HOME] [SUIVANT >]
+            if (ty >= SCREEN_HEIGHT - FOOTER_H) {
+                int third = SCREEN_WIDTH / 3;
+                if (tx < third) {
+                    gCtx.bracketView = (gCtx.bracketView + ScreenBracket::viewCount() - 1)
+                                       % ScreenBracket::viewCount();
+                    gCtx.needsFullRedraw = true;
+                } else if (tx > 2 * third) {
+                    gCtx.bracketView = (gCtx.bracketView + 1) % ScreenBracket::viewCount();
+                    gCtx.needsFullRedraw = true;
+                } else {
+                    gCtx.appState = homeStateNow();  // HOME -> sortie bracket
+                    gCtx.needsFullRedraw = true;
+                }
+            }
+        } else if (UI::isTrophyTouch(tx, ty)) {
+            // Appui sur l'icone coupe -> ouvre le bracket (phase finale)
+            gCtx.appState   = STATE_BRACKET;
+            gCtx.bracketView = 0;
+            gCtx.needsFullRedraw = true;
+        } else if ((gCtx.appState == STATE_HOME_NEXT || gCtx.appState == STATE_HOME_PRELIVE)
+                   && ty >= HEADER_H && ty < SCREEN_HEIGHT - FOOTER_H) {
+            // Zone de contenu (prochains matchs) : haut = monter, bas = descendre
+            int mid = (HEADER_H + SCREEN_HEIGHT - FOOTER_H) / 2;
+            ScreenHome::scrollUpcoming(ty < mid ? -140 : 140);
+        } else {
+            UI::handleFooterTouch(tx, ty);
+        }
         if (gCtx.needsFullRedraw) renderCurrentScreen();
     }
 

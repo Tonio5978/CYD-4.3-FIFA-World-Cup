@@ -40,4 +40,7 @@ namespace UI {
 
     // Navigate with footer touch
     void handleFooterTouch(int tx, int ty);
+
+    // True if the tap hit the trophy icon (bracket access) in the header.
+    bool isTrophyTouch(int tx, int ty);
 }
